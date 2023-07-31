@@ -1,34 +1,55 @@
-"""Git operations for autogpt"""
+"""Commands to perform Git operations"""
+
+COMMAND_CATEGORY = "git_operations"
+COMMAND_CATEGORY_TITLE = "Git Operations"
+
 from git.repo import Repo
 
-from autogpt.commands.command import command
-from autogpt.config import Config
-from autogpt.workspace import path_in_workspace
+from autogpt.agents.agent import Agent
+from autogpt.command_decorator import command
+from autogpt.url_utils.validators import validate_url
 
-CFG = Config()
+from .decorators import sanitize_path_arg
 
 
 @command(
     "clone_repository",
-    "Clone Repositoryy",
-    '"repository_url": "<repository_url>", "clone_path": "<clone_path>"',
-    CFG.github_username and CFG.github_api_key,
+    "Clones a Repository",
+    {
+        "url": {
+            "type": "string",
+            "description": "The URL of the repository to clone",
+            "required": True,
+        },
+        "clone_path": {
+            "type": "string",
+            "description": "The path to clone the repository to",
+            "required": True,
+        },
+    },
+    lambda config: bool(config.github_username and config.github_api_key),
     "Configure github_username and github_api_key.",
 )
-def clone_repository(repository_url: str, clone_path: str) -> str:
-    """Clone a GitHub repository locally
+@sanitize_path_arg("clone_path")
+@validate_url
+def clone_repository(url: str, clone_path: str, agent: Agent) -> str:
+    """Clone a GitHub repository locally.
 
     Args:
-        repository_url (str): The URL of the repository to clone
-        clone_path (str): The path to clone the repository to
+        url (str): The URL of the repository to clone.
+        clone_path (str): The path to clone the repository to.
 
     Returns:
-        str: The result of the clone operation"""
-    split_url = repository_url.split("//")
-    auth_repo_url = f"//{CFG.github_username}:{CFG.github_api_key}@".join(split_url)
-    safe_clone_path = path_in_workspace(clone_path)
+        str: The result of the clone operation.
+    """
+    split_url = url.split("//")
+    auth_repo_url = (
+        f"//{agent.config.github_username}:{agent.config.github_api_key}@".join(
+            split_url
+        )
+    )
     try:
-        Repo.clone_from(auth_repo_url, safe_clone_path)
-        return f"""Cloned {repository_url} to {safe_clone_path}"""
+        Repo.clone_from(url=auth_repo_url, to_path=clone_path)
+        return f"""Cloned {url} to {clone_path}"""
     except Exception as e:
         return f"Error: {str(e)}"
